@@ -18,6 +18,7 @@ YELLOW="\e[0;33m"
 BACK="\e[0m"
 
 VERBOSE=
+DLOADONLY=
 
 MKDIR="verbose mkdir -p"
 GIT="verbose git"
@@ -106,7 +107,7 @@ update_debian() {
 ##############################################################################
 install_debian_extras() {
 	banner "Install extra Debian packages"
-	run_apt install mosh rsync vim vim-youcompleteme
+	run_apt install git mosh rsync vim vim-addon-manager vim-youcompleteme
 
 	verbose vim-addons install youcompleteme
 
@@ -133,25 +134,31 @@ latest_tag() {
 
 ##############################################################################
 clone_kernel() {
+	local TAG
+
 	$MKDIR "${KERNELDIR%/*}"
-	if [[ ! -d $KERNELDIR ]] ; then
+	if [[ -d $KERNELDIR ]] ; then
+		banner "Update the linux kernel"
+		cd "$KERNELDIR"
+		$GIT fetch
+		$GIT checkout master
+	else
+		banner "Clone the linux kernel"
 		$GIT clone "$KERNELSRC" "$KERNELDIR"
 	fi
-	cd "$KERNELDIR"
-	$GIT checkout "$(latest_tag)"
-}
 
-##############################################################################
-welcome() {
-	banner "visit https://$(get_ip):8006/ in your browser"
-	info "Login as root, password $PASSWORD, and Realm set to 'Linux PAM standard authentication'"
+	banner "Checkout the latest tag"
+	cd "$KERNELDIR"
+	TAG="$(latest_tag)"
+	$GIT checkout "$TAG"
+
+	banner "Checkout the latest tag: $TAG"
 }
 
 ##############################################################################
 do_the_thing() {
-	check_debian
+	[[ -n $DLOADONLY ]] || check_debian
 	clone_kernel
-	#welcome
 }
 
 ##############################################################################
@@ -173,6 +180,7 @@ while [[ $1 =~ ^- ]] ; do
 	# shellcheck disable=SC2086
 	case "$1" in
 		--list) sed -n '/^do_the_thing()/,/^\}$/{//!p;}' $0; exit 0;;
+		--download-only) DLOADONLY=y;;
 		-n|--dry-run|--test) TEST="echo";;
 		--trace) set -x;;
 		-v|--verbose) VERBOSE=1;;
