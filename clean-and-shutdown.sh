@@ -20,6 +20,10 @@ CYAN="\e[0;36m"
 #BLUE="\e[0;34m"
 BACK="\e[0m"
 
+APT="verbose apt-get -y"
+DD="verbose dd"
+MKSWAP="verbose mkswap"
+
 ################################################################################
 info() {
 	echo -e "${GREEN}I:" "$@" "$BACK" >&2
@@ -53,7 +57,7 @@ run_if_in_path() {
 
 ################################################################################
 remove() {
-	verbose rm -rf "$@"
+	verbose rm -rf "${@:?}"
 }
 
 ################################################################################
@@ -68,20 +72,87 @@ truncate() {
 
 ################################################################################
 upgrade_packages() {
-	verbose apt-get update
-	verbose apt-get -y full-upgrade
+	info "Upgrade packages"
+	$APT update
+	$APT full-upgrade
+}
+
+################################################################################
+get_old_kernels() {
+	ls /boot/vmlinuz-* | sed -E -e 's|^.*vmlinuz-(.*)-[^-]+|\1|; $d'
+}
+
+################################################################################
+clean_kernels() {
+	local KERNS
+	KERNS="$(get_old_kernels)"
+	info "Cleaning up old kernels"
+
+	if [[ $KERNS =~ $(uname -r) ]] ; then
+		error "Not running the latest kernel. Reboot and run this again"
+	fi
+
+	$APT purge $KERNS
 }
 
 ################################################################################
 clean_packages() {
-	[[ $# -eq 0 ]] || verbose apt-get -y purge "$@"
-	verbose apt-get -y autoremove --purge
-	verbose apt-get -y clean
-	verbose apt-get -y autoclean
+	[[ $# -eq 0 ]] || $APT purge "$@"
+	info "Cleaning up packages"
+	$APT autoremove --purge
+	$APT clean
+	$APT autoclean
+	remove /var/cache/*
+}
+
+################################################################################
+# Zero out and reformat the swap partition or file
+clean_swaps(){
+	local SWAPS SWAPSLOT
+	SWAPS="$(sed '1d; s| .*$||;' /proc/swaps)"
+	info "Swap Partitions or file are: $SWAPS"
+
+	verbose swapoff -a
+	for SWAPSLOT in $SWAPS ; do
+		if [[ $SWAPSLOT =~ zram  ]] ; then
+			warn "SKIPPING zram device: $SWAPSLOT"
+		elif [[ $SWAPSLOT =~ /dev/ ]] ; then
+			local UUID LABEL
+			UUID=$(blkid -s UUID -o value $SWAPSLOT)
+			LABEL=$(blkid -s LABEL -o value $SWAPSLOT)
+
+			info "Clearing $SWAPSLOT, LABEL=$LABEL, UUID=$UUID "
+			$DD if=/dev/zero of="$SWAPSLOT" bs=1M
+
+			$MKSWAP -U "$UUID" ${LABEL:+-L $LABEL} "$SWAPSLOT"
+		else
+			local SIZE SIZEMB
+			info "Clearing $SWAPSLOT"
+			SIZE="$(stat -c%s "$SWAPSLOT")"
+			SIZEMB="$(( SIZE / 1024 / 1024 ))"
+			info "Clearing $SWAPSLOT with a new file of size $SIZEMB MB"
+			remove "$SWAPSLOT"
+			$DD if=/dev/zero of="$SWAPSLOT" bs=1M count="$SIZEMB"
+			verbose chmod 600 "$SWAPSLOT"
+			$MKSWAP "$SWAPSLOT"
+		fi
+	done
+}
+
+################################################################################
+clean_files() {
+	local FILES
+	info "Cleaning up files and caches"
+	FILES=$(
+		find /home /root -maxdepth 4 -name .cache -o -name .ccache | xargs --no-run-if-empty echo
+		find /var/tmp -mindepth 1 -maxdepth 1 | xargs --no-run-if-empty echo
+	)
+	remove $FILES
 }
 
 ################################################################################
 clean_ids() {
+	info "Remove machine ids"
 	run_if_in_path cloud-init clean
 	truncate /etc/machine-id
 	truncate /var/lib/dbus/machine-id
@@ -92,6 +163,8 @@ clean_ids() {
 clean_logs() {
 	local LOG
 
+	info "Clean up log files"
+	verbose journalctl --vacuum-time=1d
 	verbose systemctl stop rsyslog.service systemd-journald.service
 
 	for LOG in /var/log/* ; do
@@ -107,6 +180,7 @@ clean_logs() {
 ################################################################################
 clean_history() {
 	local FILE
+	info "Remove history"
 	while read -r FILE ; do
 		truncate "$FILE"
 	done <<<"$(find /root /home -maxdepth 1 -name .bash_history)"
@@ -115,7 +189,10 @@ clean_history() {
 ################################################################################
 export DEBIAN_FRONTEND=noninteractive
 upgrade_packages
+clean_kernels
 clean_packages
+#clean_swaps
+clean_files
 clean_ids
 clean_logs
 clean_history
