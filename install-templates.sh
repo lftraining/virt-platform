@@ -8,7 +8,7 @@
 
 set -e
 
-VERSION=1.0
+VERSION=2.0
 
 RED="\e[0;31m"
 GREEN="\e[0;32m"
@@ -17,11 +17,13 @@ YELLOW="\e[0;33m"
 #BLUE="\e[0;34m"
 BACK="\e[0m"
 
+REINSTALL=
 VERBOSE=
 
 MKDIR="verbose mkdir -p"
 PCT="verbose pct"
 PVEAM="verbose pveam"
+PVEUM="verbose pveum"
 QM="verbose qm"
 QMRESTORE="verbose qmrestore"
 RM="verbose rm -f"
@@ -33,8 +35,11 @@ CMPASSWORD="Penguin2014"
 PIHOLE_VMID=100
 DEBIAN_VMID=52000
 DESKTOP_VMID=52010
-SOURCESD="/etc/apt/sources.list.d"
-ENTERPRISE="$SOURCESD/pve-enterprise.list"
+
+PIHOLE_CONF="$HOME/tmp/pihole-config.tar.zst"
+PIHOLE_IMG="/var/lib/vz/template/cache/pihole.tar.zst"
+SERVER_IMG="$HOME/tmp/vzdump-qemu-52000.vma.zst"
+DESKTOP_IMG="$HOME/tmp/vzdump-qemu-52010.vma.zst"
 
 ##############################################################################
 verbose() {
@@ -69,17 +74,14 @@ error() {
 	verbose exit 1
 }
 
-##############################################################################
-generate_password() {
-	< /dev/urandom tr -dc _A-Z-a-z-0-9 | head "-c${1:-16}";echo; 
+################################################################################
+in_path() {
+	command -v "$@" >/dev/null 2>&1
 }
 
 ##############################################################################
 get_password() {
 	PASSWD="$HOME/passwd.txt"
-	if [[ ! -e $PASSWD ]] ; then
-		generate_password 16 >"$PASSWD"
-	fi
 	cat "$PASSWD"
 }
 
@@ -92,6 +94,8 @@ default_config() {
 	TEST="${TEST:+echo}"
 	NETWORK="10.10.10"
 	NETMASK="24"
+	DOMAIN="lf.training"
+	USERID="student"
 	PASSWORD="$(get_password)"
 	NFS="/srv/LFT"
 	DEBIANVER=11
@@ -102,10 +106,8 @@ default_config() {
 ##############################################################################
 read_config() {
 	default_config
-	
-	banner "Read Configuration"
 
-	local CONF FILES="$HOME/.config/install-proxmox/defaults.conf $HOME/.install-proxmox.conf"	
+	local CONF FILES="$HOME/.config/install-proxmox/defaults.conf $HOME/.install-proxmox.conf"
 	for CONF in $FILES ; do
 		if [[ -f "$CONF" ]] ; then
 			# shellcheck disable=SC1090
@@ -120,49 +122,143 @@ run_apt() {
 }
 
 ##############################################################################
-update_debian() {
-	banner "Update Debian packages"
-	$RM "$ENTERPRISE"
-	run_apt update
-	run_apt full-upgrade
-}
-
-##############################################################################
-install_debian_extras() {
-	if dpkg --get-selections postfix | grep -q install ; then
-		warn "Postfix already installed"
-	else
-		banner "Install Postfix"
-		verbose debconf-set-selections <<< "postfix postfix/mailname string $HOSTNAME"
-		verbose debconf-set-selections <<< "postfix postfix/main_mailer_type string 'Local only'"
-		run_apt install postfix
-		$RM debconf-set-selections
-	fi
-
+install_packages() {
 	banner "Install extra Debian packages"
-	run_apt install chrony etckeeper ksmtuned lsof mosh needrestart nfs-kernel-server rsync ssh sudo unattended-upgrades
-
-	banner "Remove uneeded Debian packages"
-	run_apt purge reportbug python3-debian python3-debianbts python3-httplib2 python3-pycurl python3-pysimplesoap python3-reportbug
+	run_apt install needrestart
 }
 
 ##############################################################################
-setup_debian() {
-	update_debian
-	install_debian_extras
+setup_proxmox_users() {
+	local USER="$USERID@pve" GROUP="admin"
+	banner "Setup Proxmox users"
+	set +e
+	$PVEUM group add "$GROUP" -comment "System Administrators" 2>&1 | grep -v failed
+	$PVEUM acl modify / -group "$GROUP" -role Administrator
+	$PVEUM user del "$USER"
+	$PVEUM user add "$USER" --password "$PASSWORD" --firstname "Linux" --lastname "Learner"
+	$PVEUM user modify "$USER" -group admin
+	$PVEUM pool add services --comment "Services Pool" 2>&1 | grep -v failed
+	set -e
 }
 
 ##############################################################################
-check_kernel_version() {
-	local KVER
-	KVER="$(uname -r | sed -E -e 's/^([0-9]+\.[0-9]+)\..*$/\1/')"
+setup_bridge() {
+	local BRIDGE="vmbr0"
+	local IFACE="eth0"
+	local INTERFACES="/etc/network/interfaces"
 
-	if [[ $KVER != 5.15 ]] ; then
-		warn "You need to reboot before continuing"
-		info "Once you reboot, rerun $0"
-		exit 0
+	banner "Setup Bridge:$BRIDGE"
+	if grep -q "iface $BRIDGE inet" "$INTERFACES" ; then
+		warn "Network already configured: $BRIDGE"
+	elif [[ -z $TEST ]] ; then
+		info "Adding $BRIDGE to $INTERFACES"
+		cat <<END >>"$INTERFACES"
+
+auto $BRIDGE
+iface $BRIDGE inet static
+	address $NETWORK.1/$NETMASK
+	bridge-ports none
+	bridge-stp off
+	bridge-fd 0
+        post-up   echo 1 > /proc/sys/net/ipv4/ip_forward
+        post-up   iptables -t nat -A POSTROUTING -s '$NETWORK.0/$NETMASK' -o $IFACE -j MASQUERADE
+	post-up   iptables -t raw -I PREROUTING -i fwbr+ -j CT --zone 1
+        post-down iptables -t nat -D POSTROUTING -s '$NETWORK.0/$NETMASK' -o $IFACE -j MASQUERADE
+	post-down iptables -t raw -D PREROUTING -i fwbr+ -j CT --zone 1
+END
+	fi
+	chmod 644 "$INTERFACES"
+
+	info "Bring up $BRIDGE"
+	verbose ifup $BRIDGE
+}
+
+##############################################################################
+setup_firewall() {
+	local FW="/etc/pve/firewall/cluster.fw"
+	banner "Setup Cluster Firewall"
+	if [[ -e "$FW" ]] ; then
+		warn "Cluster Firewall already configured: $FW"
+	elif [[ -z $TEST ]] ; then
+		info "Install Cluster Firewall"
+		$MKDIR "${FW%/*}"
+		cat <<END >"$FW"
+[OPTIONS]
+
+enable: 1
+
+[RULES]
+
+GROUP ssh
+GROUP proxmox -i eth0
+GROUP web
+
+[group proxmox] # Proxmox GUI
+
+IN ACCEPT -p tcp -dport 8006 -log nolog # Proxmox web GUI
+IN VNC(ACCEPT) -log nolog # VNC port
+IN ACCEPT -p tcp -dport 3128 -log nolog # Spice Proxy for remote terminals
+
+[group ssh] # Remote access
+
+IN SSH(ACCEPT) -log nolog # SSH on normal port
+IN ACCEPT -p udp -dport 60000:60010 -log nolog # Mosh access
+
+[group web] # Web ports
+
+IN HTTP(ACCEPT) -log nolog
+IN HTTPS(ACCEPT) -log nolog
+
+END
+	fi
+	chown -R root:www-data "${FW%/*}"
+
+	local FW="/etc/pve/local/host.fw"
+	banner "Setup Host Firewall"
+	if [[ -e "$FW" ]] ; then
+		warn "Host Firewall already configured: $FW"
+	elif [[ -z $TEST ]] ; then
+		info "Install Host Firewall"
+		cat <<END >"$FW"
+[RULES]
+
+IN ACCEPT -i vmbr0 -p tcp -dport 111,2049 -log nolog # NFS
+END
+	fi
+
+	chown -R root:www-data "${FW%/*}"
+
+	if pve-firewall compile >/dev/null ; then
+		info "Restart Firewall"
+		verbose pve-firewall restart
+	else
+		error "Firewall rules failed"
 	fi
 }
+
+##############################################################################
+setup_network() {
+	setup_bridge
+	setup_firewall
+}
+
+##############################################################################
+#update_dyndns() {
+#	banner "Update DynDNS:"
+#	# TODO
+#}
+
+##############################################################################
+#update_letsencrypt() {
+#	banner "Update Letsencrypt"
+#	# TODO
+#}
+
+##############################################################################
+#setup_dns() {
+#	update_dyndns
+#	update_letsencrypt
+#}
 
 ##############################################################################
 setup_nfs() {
@@ -209,7 +305,8 @@ get_lxc_templates() {
 get_image() {
 	local FILE=${1##*/}
 	local TEMPLDIR=${1%/*}
-	local URL="http://training.linuxfoundation.org/cm/images"
+	#local URL="http://training.linuxfoundation.org/cm/images"
+	local URL="http://images.lf.training"
 
 	banner "Get image $FILE"
 	$MKDIR "$TEMPLDIR"
@@ -217,24 +314,35 @@ get_image() {
 }
 
 ##############################################################################
-restore_pihole() {
-	local VMID="$PIHOLE_VMID"
-	local IMAGE="/var/lib/vz/template/cache/pihole.tar.zst"
-	local CONFIG="/tmp/pihole-config.tar.zst"
+lxc_already_installed() {
+	local VMID=$1
+	[[ -z ${REINSTALL} && -e "/etc/pve/lxc/$VMID.conf" ]] && pct list | grep -E -q -e "$VMID *running"
+}
 
-	get_image "$IMAGE"
+##############################################################################
+restore_pihole() {
+	local VMID="$PIHOLE_VMID" EXISTS=
+
+	if lxc_already_installed "$VMID" ; then
+		info "Pihole installed and running"
+		return
+	fi
+
+	get_image "$PIHOLE_IMG"
 
 	banner "Restore pihole"
 	if [[ -e "/etc/pve/lxc/$VMID.conf" ]] ; then
+		$PCT stop "$VMID"
 		$PCT destroy "$VMID"
 	fi
-	$PCT create "$VMID" "$IMAGE" --restore 1
+	$PCT create "$VMID" "$PIHOLE_IMG" --restore 1
 		#--features "nesting=1" --hostname "pihole" --memory "1024" \
 		#--net0 "name=eth0,bridge=vmbr0,gw=$NETWORK.1,ip=$NETWORK.2/$NETMASK" \
 		#--onboot 1 --password "$PASSWORD" --unprivileged 0
 
-	get_image "$CONFIG"
-	verbose tar -C /var/lib -x -f "$CONFIG"
+	get_image "$PIHOLE_CONF"
+	verbose tar -C /var/lib -x -f "$PIHOLE_CONF"
+	$RM "$PIHOLE_CONF"
 
 	$PCT start "$VMID"
 }
@@ -246,45 +354,117 @@ setup_containers() {
 }
 
 ##############################################################################
-install_debian_console_template() {
-	banner "Get Debian Console Template"
-	local IMAGE="/tmp/vzdump-qemu-52000.vma.zst"
-	get_image "$IMAGE"
-	banner "Restore debian template"
-	if [[ -e "/etc/pve/qemu-server/$DEBIAN_VMID.conf" ]] ; then
-		$QM destroy "$DEBIAN_VMID"
-	fi
-	$QMRESTORE "$IMAGE" "$DEBIAN_VMID" --unique 1
-	#$QM set "$DEBIAN_VMID" --template 1
-	$RM "$IMAGE"
+vm_already_installed() {
+	local VMID=$1
+	[[ -z ${REINSTALL} && -e "/etc/pve/qemu-server/$VMID.conf" ]] && qm list | grep -E -q -e "$VMID .*stopped"
 }
 
 ##############################################################################
-install_debian_desktop_template() {
-	banner "Get Debian Desktop Template"
-	local IMAGE="/tmp/vzdump-qemu-52010.vma.zst"
-	get_image "$IMAGE"
-	banner "Restore debian desktop template"
-	if [[ -e "/etc/pve/qemu-server/$DESKTOP_VMID.conf" ]] ; then
-		$QM destroy "$DESKTOP_VMID"
+install_vm_template() {
+	local VMID=$1 IMAGE=$2 WHAT=$3
+	if vm_already_installed "$VMID" ; then
+		info "$WHAT template already installed"
+		return
 	fi
-	$QMRESTORE "$IMAGE" "$DESKTOP_VMID" --unique 1
-	#$QM set "$DESKTOP_VMID" --template 1
+
+	banner "Get $WHAT Template"
+	get_image "$IMAGE"
+	banner "Restore $WHAT template"
+	if [[ -e "/etc/pve/qemu-server/$VMID.conf" ]] ; then
+		$QM destroy "$VMID"
+	fi
+	$QMRESTORE "$IMAGE" "$VMID" --unique 1
 	$RM "$IMAGE"
 }
 
 ##############################################################################
 setup_vms() {
-	install_debian_console_template
-	install_debian_desktop_template
+	install_vm_template "$DEBIAN_VMID" "$SERVER_IMG" "Debian Console"
+	install_vm_template "$DESKTOP_VMID" "$DESKTOP_IMG" "Debian Desktop"
+}
+
+##############################################################################
+download_images() {
+	banner "Download templates"
+	get_image "$PIHOLE_CONF"
+	get_image "$PIHOLE_IMG"
+	get_image "$SERVER_IMG"
+	get_image "$DESKTOP_IMG"
+}
+
+##############################################################################
+get_ip() {
+	ip route get 1.1.1.1 | grep -oP 'src \K\S+'
+}
+
+##############################################################################
+welcome() {
+	local IP
+	IP="$(get_ip)"
+
+	banner "visit https://$IP:8006/ in your browser"
+	info "Login as root, password $PASSWORD and Realm set to 'Linux PAM standard authentication'"
+	#info "If your instructor can set $HOST.$DOMAIN to point to $IP you can then setup Letsencrypt"
+}
+
+##############################################################################
+check_kernel_version() {
+	local KVER
+	KVER="$(uname -r | sed -E -e 's/^([0-9]+\.[0-9]+)\..*$/\1/')"
+
+	if [[ $KVER != 5.15 ]] ; then
+		warn "You need to reboot before continuing"
+		info "Once you reboot, run install-templates.sh"
+		exit 0
+	fi
 }
 
 ##############################################################################
 do_the_thing() {
 	check_kernel_version
+	install_packages
+	setup_proxmox_users
+	setup_network
+	#setup_dns
 	setup_nfs
 	setup_containers
 	setup_vms
+	welcome
+}
+
+##############################################################################
+run_thing_in_byobu() {
+	local DIR="${0%/*}"
+	local GETKERN="${DIR:-.}/get-kernel.sh"
+	local GETISOS="${DIR:-.}/get-isos.sh"
+
+	if ! in_path byobu ; then
+		run_apt update
+		banner "Install byobu packages"
+		run_apt install byobu
+	fi
+	if ! in_path byobu ; then
+		error "byobu not found"
+	fi
+
+	if byobu list-session 2>&1 | grep -E -q -e "^no server|^error connecting" ; then
+		byobu new-session -d -n 'install-templates' "$0 --run; bash"
+
+		if [[ -f $GETISOS ]] ; then
+			byobu new-window -t 1 -n 'get-isos' "$GETISOS"
+		fi
+
+		if [[ -f $GETKERN ]] ; then
+			byobu new-window -t 2 -n 'get-kernel' "$GETKERN --download-only"
+		fi
+
+		byobu select-window -t 0
+		byobu attach-session
+	elif [[ -n $STY || -n $TMUX ]] ; then
+		"$0" --run
+	else
+		byobu
+	fi
 }
 
 ##############################################################################
@@ -305,8 +485,11 @@ read_config
 while [[ $1 =~ ^- ]] ; do
 	# shellcheck disable=SC2086
 	case "$1" in
+		--run) RUN=y;;
 		--list) sed -n '/^do_the_thing()/,/^\}$/{//!p;}' $0; exit 0;;
+		--download-only) download_images; exit 0;;
 		-n|--dry-run|--test) TEST="echo";;
+		--reinstall) REINSTALL=y;;
 		--trace) set -x;;
 		-v|--verbose) VERBOSE=1;;
 		-V|--version) echo $VERSION; exit 0;;
@@ -322,6 +505,8 @@ if [[ $# -gt 0 ]] ; then
 		"$1"
 		shift
 	done
-else
+elif [[ -n ${RUN:-} ]] ; then
 	time do_the_thing
+else
+	run_thing_in_byobu
 fi
