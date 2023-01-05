@@ -84,7 +84,7 @@ add_after() {
 RMPKGS="apt-listchanges debian-faq doc-debian"
 
 ADDPKGS="byobu cloud-utils debfoster lsof mosh nfs-common openssh-server
-	qemu-guest-agent rsync sudo terminator vim vim-scripts vim-youcompleteme"
+	qemu-guest-agent rsync sudo terminator vim vim-scripts vim-addon-manager vim-youcompleteme"
 KERNELPKGS="bc bison build-essential flex libelf-dev libssl-dev lz4"
 
 # Make sure to not check the CDROM for packages since it is unmounted
