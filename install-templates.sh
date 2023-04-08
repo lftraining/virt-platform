@@ -268,7 +268,7 @@ setup_nfs() {
 		warn "NFS Export already added."
 	elif [[ -z $TEST ]] ; then
 		cat <<END >>"$EXPORTS"
-$NFS	$NETWORK.0/$NETMASK(rw,sync,no_subtree_check)
+$NFS	$NETWORK.0/$NETMASK(rw,sync,no_subtree_check,no_root_squash)
 END
 	fi
 
