@@ -383,7 +383,7 @@ run_thing_in_byobu() {
 	if ! in_path byobu ; then
 		run_apt update
 		banner "Install byobu packages"
-		eun_apt install byobu
+		run_apt install byobu
 	fi
 	if ! in_path byobu ; then
 		error "byobu not found"
