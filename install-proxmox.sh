@@ -316,7 +316,7 @@ install_packages() {
 	banner "Install extra Debian packages"
 	warn "Your connection will break as network changes are made.\nReconnect when you can and run byobu"
 	run_apt install ifupdown2
-	run_apt install chrony etckeeper ksmtuned lsof mosh nfs-kernel-server nmap postfix rsync ssh sudo unattended-upgrades vim vim-addon-manager vim-youcompleteme bc bison build-essential flex libelf-dev libssl-dev lz4 proxmox-ve
+	run_apt install chrony etckeeper ksmtuned lsof mosh nfs-kernel-server nmap postfix rsync ssh sudo unattended-upgrades vim vim-addon-manager vim-youcompleteme bc bison build-essential flex libelf-dev htop libncurses-dev libssl-dev lz4 proxmox-ve
 	$RM "$ENTERPRISE"
 	run_apt full-upgrade
 
