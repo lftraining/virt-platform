@@ -31,7 +31,7 @@ CMUSERNAME="LFtraining"
 CMPASSWORD="Penguin2014"
 
 SOURCESD="/etc/apt/sources.list.d"
-ENTERPRISE="$SOURCESD/pve-enterprise.list"
+ENTERPRISE="$SOURCESD/pve-enterprise.sources"
 PVELIST="$SOURCESD/pve-install-repo.list"
 
 CMD="install-proxmox"
