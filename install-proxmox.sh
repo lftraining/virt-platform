@@ -285,8 +285,14 @@ install_proxmox_sources() {
 	local REPO="http://download.proxmox.com/debian/pve"
 	local KEY="http://download.proxmox.com/debian/proxmox-release-$VERSION_CODENAME.gpg"
 	if [[ -z $TEST && ! -e $PVELIST ]] ; then
-		echo "deb $REPO $VERSION_CODENAME pve-no-subscription" >"$PVELIST"
-		$WGET -O- "$KEY" 2>/dev/null | verbose apt-key add -
+		cat > /etc/apt/sources.list.d/pve-install-repo.sources << EOL
+Types: deb
+URIs: $REPO
+Suites: $VERSION_CODENAME
+Components: pve-no-subscription
+Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+EOL
+		wget https://enterprise.proxmox.com/debian/proxmox-archive-keyring-$VERSION_CODENAME.gpg -O /usr/share/keyrings/proxmox-archive-keyring.gpg
 	fi
 }
 

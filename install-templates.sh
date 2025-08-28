@@ -98,9 +98,10 @@ default_config() {
 	USERID="student"
 	PASSWORD="$(get_password)"
 	NFS="/srv/LFT"
-	DEBIANVER=11
+	DEBIANVER=12
 	DEBIANARCH="amd64"
-	LXCTEMPL="debian-$DEBIANVER-standard_$DEBIANVER.3-1_$DEBIANARCH.tar.zst"
+	# e.g. debian-12-standard_12.7-1_amd64.tar.zst
+	LXCTEMPL="debian-$DEBIANVER-standard_$DEBIANVER.7-1_$DEBIANARCH.tar.zst"
 }
 
 ##############################################################################
@@ -144,7 +145,7 @@ setup_proxmox_users() {
 ##############################################################################
 setup_bridge() {
 	local BRIDGE="vmbr0"
-	local IFACE="eth0"
+	local IFACE="$(get_if_name)"
 	local INTERFACES="/etc/network/interfaces"
 
 	banner "Setup Bridge:$BRIDGE"
@@ -175,6 +176,7 @@ END
 
 ##############################################################################
 setup_firewall() {
+	local IF_NAME="$(get_if_name)"
 	local FW="/etc/pve/firewall/cluster.fw"
 	banner "Setup Cluster Firewall"
 	if [[ -e "$FW" ]] ; then
@@ -190,7 +192,7 @@ enable: 1
 [RULES]
 
 GROUP ssh
-GROUP proxmox -i eth0
+GROUP proxmox -i $IF_NAME
 GROUP web
 
 [group proxmox] # Proxmox GUI
@@ -322,6 +324,7 @@ lxc_already_installed() {
 ##############################################################################
 restore_pihole() {
 	local VMID="$PIHOLE_VMID" EXISTS=
+	local IF_NAME="$(get_if_name)"
 
 	if lxc_already_installed "$VMID" ; then
 		info "Pihole installed and running"
@@ -337,7 +340,7 @@ restore_pihole() {
 	fi
 	$PCT create "$VMID" "$PIHOLE_IMG" --restore 1
 		#--features "nesting=1" --hostname "pihole" --memory "1024" \
-		#--net0 "name=eth0,bridge=vmbr0,gw=$NETWORK.1,ip=$NETWORK.2/$NETMASK" \
+		#--net0 "name=$IF_NAME,bridge=vmbr0,gw=$NETWORK.1,ip=$NETWORK.2/$NETMASK" \
 		#--onboot 1 --password "$PASSWORD" --unprivileged 0
 
 	get_image "$PIHOLE_CONF"
@@ -397,6 +400,13 @@ get_ip() {
 	ip route get 1.1.1.1 | grep -oP 'src \K\S+'
 }
 
+get_if_name() {
+	local IP
+	IP="$(get_ip)"
+
+	ip -br addr show to $IP | awk '{print $1}'
+}
+
 ##############################################################################
 welcome() {
 	local IP
@@ -409,10 +419,10 @@ welcome() {
 
 ##############################################################################
 check_kernel_version() {
-	local KVER
-	KVER="$(uname -r | sed -E -e 's/^([0-9]+\.[0-9]+)\..*$/\1/')"
+	local PVE_KERNEL
+	PVE_KERNEL="$(uname -r | sed -E -e 's/^[0-9]+\.[0-9]+\..*(-pve)$.*$/\1/')"
 
-	if [[ $KVER != 5.15 ]] ; then
+	if [[ $PVE_KERNEL != "-pve" ]] ; then
 		warn "You need to reboot before continuing"
 		info "Once you reboot, run install-templates.sh"
 		exit 0
