@@ -378,6 +378,13 @@ install_vm_template() {
 	fi
 	$QMRESTORE "$IMAGE" "$VMID" --unique 1
 	$RM "$IMAGE"
+
+	#
+        # Proxmox no longer supports physical cdrom access from the guest,
+        # and starting the vm will fail if there is a cdrom in the machine
+        # definition.
+        #
+        qm set $VMID --delete ide2
 }
 
 ##############################################################################
