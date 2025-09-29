@@ -35,11 +35,13 @@ CMPASSWORD="Penguin2014"
 PIHOLE_VMID=100
 DEBIAN_VMID=52000
 DESKTOP_VMID=52010
+FEDORA_WS_VMID=52020
 
 PIHOLE_CONF="$HOME/tmp/pihole-config.tar.zst"
 PIHOLE_IMG="/var/lib/vz/template/cache/pihole.tar.zst"
 SERVER_IMG="$HOME/tmp/vzdump-qemu-52000.vma.zst"
 DESKTOP_IMG="$HOME/tmp/vzdump-qemu-52010.vma.zst"
+FEDORA_WS_IMG="$HOME/tmp/vzdump-qemu-52020.vma.zst"
 
 ##############################################################################
 verbose() {
@@ -391,6 +393,7 @@ install_vm_template() {
 setup_vms() {
 	install_vm_template "$DEBIAN_VMID" "$SERVER_IMG" "Debian Console"
 	install_vm_template "$DESKTOP_VMID" "$DESKTOP_IMG" "Debian Desktop"
+	install_vm_template "$FEDORA_WS_VMID" "$FEDORA_WS_IMG" "Fedora Desktop"
 }
 
 ##############################################################################
@@ -400,6 +403,7 @@ download_images() {
 	get_image "$PIHOLE_IMG"
 	get_image "$SERVER_IMG"
 	get_image "$DESKTOP_IMG"
+	get_image "$FEDORA_WS_IMG"
 }
 
 ##############################################################################
