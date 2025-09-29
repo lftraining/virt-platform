@@ -10,6 +10,21 @@
 # create NFS mounts, setup ttys, and install the desktop enviornmaent if
 # specified, among other things.
 #
+# The packages added to the new VM (when created and run) are specific to
+# the needs of LFD441.
+#
+# Notes:
+#    My initial intent was to run a bunch of virt-customize type of comamnds to
+#    pre-setup the qcow2 with everything all without needing a cloutinit.iso.
+#    However, I couldn't seem to get this to work. When installing certain
+#    packages into the qcow2 file, the VM's networking wouldn't come up, or
+#    logins were no longer possible, etc.
+#
+#    I had similar issues with virt-builder.
+#
+#    It's possible those tools can work and I just didn't uncover what I was
+#    doing wrong.
+#
 
 declare -A IMG_VARS
 
