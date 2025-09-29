@@ -1,0 +1,165 @@
+This document describes how to create a vma.zst file to use in Proxmox for use in autmated setup scripts for students.
+
+Th easiest way is to run the script create_vma.zst.sh  (or through the symlink file main_script.sh).
+
+Below this document describes how to create vma.zst files by hand if helpful.
+
+=== How to pick a vmid ===
+Note this process creates a new template with a provided <vmid>. A <vmid> is
+just a number proxmox uses to uniquely identify VMs, templates, and containers.
+The <vmid> you pick needs to be unique, and if you're using a new <vmid> (as
+opposed to deleting a previous template first), you'll need to update the
+install_templates.sh file to install the new template with the new id.
+
+=======
+Running create_vma.zst.sh (also as main_script.sh)
+=======
+
+LFD441 quick start:
+  create_vma.zst.sh <vmid> --lfd441 [--desktop ] <template name> <source cloud image file>
+
+To get help on more options for create_vma.zst.sh, run:
+  create_vma.zst.sh --help
+
+Note the --lfd441 is a meta option that sets other options. All the options can
+be set directly.
+
+If not using the option '--lfd441', at a minimum, you'll want to set the root
+password with the option '--root-pw <passwd>' so you can log into the guest as
+root.
+
+This script makes use of other scripts that can be called individually to
+perform smaller steps of the process.
+
+When run create_vma.zst.sh, will do the following:
+  1. Create a new qcow2 and cloud init iso from an existing cloud image.
+
+     If a size is provided, the new qcow2 will be resized (expanded. shrinking
+     is not supported) along with the internal paritions and their respective
+     filesystems.
+
+     The root password is also directly set in the new qcow2. In the case that
+     cloud-init failes, we can still login as root.
+
+  2. Create A VM from the new qcow2 and the new custom cloud init iso.
+
+  3. Start the VM so the cloud init settings can be applied.
+
+  4. Wait for VM to stop
+
+     At this point, log in to the new VM. On first login, the guest will wait
+     for cloud-init to complate. If it doesn't do this, you should wait for
+     cloud-init to complete with:
+        cloud-init status --wait
+
+     If you used the option --desktop, this will take a while.
+
+     Note: The desktop install will reboot the machine once so you can access
+           the desktop enviornment and make adjustments before letting the
+           script proceed.
+ 
+     When all set, shutdown the VM
+
+  4. Reconfigure cloud init for Proxmox
+
+     The custom cloud init is removed and a new one that ties to the proxmox
+     web UI is added in.
+ 
+  5. Convert the VM to a template
+
+  6. Backup the template and copy it to the current directory as a vma.zst
+
+=======
+Running individual scripts instead 
+=======
+If you'd prefer you can run the lower level scripts directly to:
+  - set up your qcow2 image and create the cloud init iso file
+  - create the VM
+  - remove the previous custom cloud-init and add new simpler one
+  - convert the VM to a template
+  - create a backup and copy it out
+
+  For LFD441, run the commands the following way:
+  ./mk_cloud_img_init.sh <vmid> --lfd441 [--desktop auto|manual] <source qcow2> <new qcow2>
+
+  ./create_vm.sh <vmid> --lfd441 <new qcow2> <cloudinit iso>
+  (the cloudinit iso file is created in the previous step)
+
+  qm <vmid> start
+
+  (now connect to the vm, login, wait for cloud-init to complete and possibly
+   run
+      /root/desktop_config.sh
+   in the guest if you used the option '--desktop manual' was given to
+   mk_cloud_img_init.sh. shutdown guest when ready)
+
+  ./create_proxmox_cloudinit.sh <vmid> Penguin2014
+
+  ./convet_to_template.sh <vmid>
+
+  ./backup_to.sh <vmid>
+
+=======
+Manaual creation of .vma.zst files in Proxmox
+=======
+If you'd rather make the teamplates manually in Proxmox, here are the steps
+needed for use in LFD441
+
+1. Create the VM in Proxmox.
+
+   For LFD441, the VM should have the following hardware
+   2G RAM, 2 CPUs, UEFI BIOS, 32G disk, bridged network, 1 serial port
+
+   This can be done through the Proxmox web UI. You can install from a .iso
+   file.
+
+   If you prefer to install from an exisitng qcow2 file, you can look through
+   the scripts' code to see how this is done.
+
+3. Run the guest VM and install and setup what's needed inside.
+
+   For LFD441, VM's should have:
+     users
+       student, pwd: I<3Penguins
+     packages
+       debian:
+         nfs-common openssh-server sudo vim
+         bc bison build-essential flex libelf-dev libssl-dev lz4
+       fedora:
+         nfs-utils openssh-server sudo vim
+         bc bison flex elfutils-libelf-devel kernel-devel openssl-devel lz4
+         lz4-libs
+     /etc/hosts
+       10.10.10.1 proxmox
+       10.10.10.2 pihole
+
+     nfs
+       mkdir /srv/LFT with mode of 777
+       /etc/fstab
+         proxmox:/srv/LFT /srv/LFT
+     tty
+       systemctl enable serial-getty@ttyS0
+
+   If VM has the graphical desktop then the following is also set
+     desktop settings
+       auto login to student account
+       disable auto screen blanking
+
+4. Compress the disk image
+
+   Disk files in Proxmox are typically stored in:
+     /var/lib/vz/images/<vmid>/
+
+   A good way to compress a qcow2 is to run:
+     virt-sparsify --tmpdir <some big tmpdir> --compress /var/lib/vz/images/<vmid>/<name of qcow2> tmp.qcow2
+      (note: virt-sparsify doesn't shrink in place)
+     mv tmp.qcow2 /var/lib/vz/images/<vmid>/<name of qcow2>
+
+5. Convert the VM to a template in web UI or from command line:
+     qm template <vmid>
+
+6. Backup the VM in web UI or from command line:
+     vzdump <vmid> --compress zstd
+
+7. Copy the backup for your use
+   cp /var/lib/vz/dump/vzdump-qemu-<vmid>*.vma.zst <path/where/you/want/it>
