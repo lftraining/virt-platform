@@ -1,4 +1,13 @@
 #!/bin/bash
+##############################################################################
+# Written by: John Bonesio
+# Licensed under the GPLv2
+#
+# Shrink the file size of a Proxmox VM and then make it a template
+#
+# The shrinking is done through virt-sparsify which makes writes 0's to all the
+# unused blocks and making the file sparse.
+#
 
 #######
 # Pull in helper functions

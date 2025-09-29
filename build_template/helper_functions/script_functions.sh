@@ -1,4 +1,10 @@
 #!/bin/bash
+##############################################################################
+# Written by: John Bonesio
+# Licensed under the GPLv2
+#
+# helper functions to run other scripts
+#
 
 #######
 # General script helper functions

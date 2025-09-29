@@ -1,7 +1,9 @@
 #!/bin/bash
-
-#######
-# General vm image helper functions
+##############################################################################
+# Written by: John Bonesio
+# Licensed under the GPLv2
+#
+# helper functions to operate on VM images (qcow2 files)
 #
 
 vm_is_present() { echo "vm functions present"; }

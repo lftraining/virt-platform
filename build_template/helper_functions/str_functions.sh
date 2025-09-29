@@ -1,8 +1,11 @@
 #!/bin/bash
-
-#######
-# General string helper functions
+##############################################################################
+# Written by: John Bonesio
+# Licensed under the GPLv2
 #
+# helper functions to operate on strings
+#
+
 
 str_is_present() { echo "str functions present"; }
 
@@ -21,7 +24,7 @@ str_first_field() {
         echo "${str%%$sep*}"
 }
 
-###
+
 # str_last_field <str> [separator char (optional)]
 #
 # 'str_last_field' prints the last field of a string delimited by a given

@@ -1,4 +1,10 @@
 #!/bin/bash
+##############################################################################
+# Written by: John Bonesio
+# Licensed under the GPLv2
+#
+# Backup a Proxmox template and copy it out
+#
 
 source helper_functions/proxmox_functions.sh
 source helper_functions/file_functions.sh
@@ -21,4 +27,4 @@ fi
 
 vzdump "$vmid" --compress zstd --notification-mode notification-system
 backup_file=$(file_find_newest "/var/lib/vz/dump/vzdump-qemu-${vmid}*.vma.zst")
-cp $backup_file "$target"
+rsync -ah --progress "$backup_file" "$target"

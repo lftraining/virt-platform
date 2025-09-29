@@ -1,4 +1,11 @@
 #!/bin/bash
+##############################################################################
+# Written by: John Bonesio
+# Licensed under the GPLv2
+#
+# Creates and attaches a cloud-init disk to a proxmox VM where Proxmox can
+# change things like root passwords in the web UI.
+#
 
 usage() {
 	CMDBASE=$(basename $0)

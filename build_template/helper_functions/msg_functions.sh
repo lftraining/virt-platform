@@ -1,12 +1,14 @@
 #!/bin/bash
+##############################################################################
+# Written by: John Bonesio
+# Licensed under the GPLv2
+#
+# helper functions to print messages
+#
 
 RED="\e[0;31m"
 GREEN="\e[0;32m"
 BACK="\e[0m"
-
-#######
-# General messaging helper functions
-#
 
 msg_is_present() { echo "msg functions present"; }
 

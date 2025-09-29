@@ -1,4 +1,10 @@
 #!/bin/bash
+##############################################################################
+# Written by: John Bonesio
+# Licensed under the GPLv2
+#
+# Create a proxmox VM from the provided qcow2 and cloudinit.iso files
+#
 
 #######
 # Pull in helper functions

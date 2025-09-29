@@ -1,4 +1,28 @@
 #!/bin/bash
+##############################################################################
+# Written by: John Bonesio
+# Licensed under the GPLv2
+#
+# Automatically (mostly) create a Proxmox tempate from a provided cloud
+# image (qcow2), backs it up and copies the *.vma.zst file out.
+#
+# The *.vma.zst can then be uploaded to cm where the install_tempaltes.sh script
+# can download it and install it in student's lab environment during setup.
+#
+# A lot is going on to not just create the template, but to also automtatically
+# create users, install packages, setup host names, create NFS mounts, setup
+# ttys, and install the desktop enviornmaent if specified, among other
+# things.
+#
+# This script is a wrapper around the other scripts in this directory:
+#   mk_cloud_img_init.sh
+#   create_vm.sh 
+#   create_proxmox_cloudinit.sh 
+#   convert_to_template.sh 
+#   backup_to.sh 
+#
+# The README file explains how to use this script
+#
 
 #######
 # Pull in helper functions

@@ -1,7 +1,9 @@
 #!/bin/bash
-
-#######
-# General file helper functions
+##############################################################################
+# Written by: John Bonesio
+# Licensed under the GPLv2
+#
+# helper functions to operate on files
 #
 
 SED="sed -E"

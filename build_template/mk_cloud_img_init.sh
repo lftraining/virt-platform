@@ -1,4 +1,15 @@
 #!/bin/bash
+##############################################################################
+# Written by: John Bonesio
+# Licensed under the GPLv2
+#
+# Create qcow2 disk image and cloudinit.iso files to use when creating a new VM.
+#
+# The qcow2 and cloudinit.iso files will work so when they're used in a new VM,
+# on first start, the VM will create users, install packages, setup host names,
+# create NFS mounts, setup ttys, and install the desktop enviornmaent if
+# specified, among other things.
+#
 
 declare -A IMG_VARS
 

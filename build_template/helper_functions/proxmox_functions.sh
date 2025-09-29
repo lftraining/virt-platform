@@ -1,7 +1,9 @@
 #!/bin/bash
-
-#######
-# General proxmox helper functions
+##############################################################################
+# Written by: John Bonesio
+# Licensed under the GPLv2
+#
+# helper functions to manage proxmox VMs
 #
 
 proxmox_is_present() { echo "proxmox functions present"; }
