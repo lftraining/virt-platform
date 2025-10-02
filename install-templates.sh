@@ -33,15 +33,15 @@ CMUSERNAME="LFtraining"
 CMPASSWORD="Penguin2014"
 
 PIHOLE_VMID=100
-DEBIAN_VMID=52000
-DESKTOP_VMID=52010
-FEDORA_WS_VMID=52020
+DEB_SERVER_VMID=52000
+DEB_DESKTOP_VMID=52010
+FED_DESKTOP_VMID=53020
 
 PIHOLE_CONF="$HOME/tmp/pihole-config.tar.zst"
 PIHOLE_IMG="/var/lib/vz/template/cache/pihole.tar.zst"
-SERVER_IMG="$HOME/tmp/vzdump-qemu-52000.vma.zst"
-DESKTOP_IMG="$HOME/tmp/vzdump-qemu-52010.vma.zst"
-FEDORA_WS_IMG="$HOME/tmp/vzdump-qemu-52020.vma.zst"
+DEB_SERVER_IMG="$HOME/tmp/vzdump-qemu-53000.vma.zst"
+DEB_DESKTOP_IMG="$HOME/tmp/vzdump-qemu-53010.vma.zst"
+FED_DESKTOP_IMG="$HOME/tmp/vzdump-qemu-53020.vma.zst"
 
 ##############################################################################
 verbose() {
@@ -391,9 +391,9 @@ install_vm_template() {
 
 ##############################################################################
 setup_vms() {
-	install_vm_template "$DEBIAN_VMID" "$SERVER_IMG" "Debian Console"
-	install_vm_template "$DESKTOP_VMID" "$DESKTOP_IMG" "Debian Desktop"
-	install_vm_template "$FEDORA_WS_VMID" "$FEDORA_WS_IMG" "Fedora Desktop"
+	install_vm_template "$DEB_SERVER_VMID" "$DEB_SERVER_IMG" "Debian Console"
+	install_vm_template "$DEB_DESKTOP_VMID" "$DEB_DESKTOP_IMG" "Debian Desktop"
+	install_vm_template "$FED_DESKTOP_VMID" "$FED_DESKTOP_IMG" "Fedora Desktop"
 }
 
 ##############################################################################
@@ -401,9 +401,9 @@ download_images() {
 	banner "Download templates"
 	get_image "$PIHOLE_CONF"
 	get_image "$PIHOLE_IMG"
-	get_image "$SERVER_IMG"
-	get_image "$DESKTOP_IMG"
-	get_image "$FEDORA_WS_IMG"
+	get_image "$DEB_SERVER_IMG"
+	get_image "$DEB_DESKTOP_IMG"
+	get_image "$FED_DESKTOP_IMG"
 }
 
 ##############################################################################
