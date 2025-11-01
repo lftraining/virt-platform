@@ -18,6 +18,7 @@ YELLOW="\e[0;33m"
 BACK="\e[0m"
 
 REINSTALL=
+UBUNTU=
 VERBOSE=
 
 MKDIR="verbose mkdir -p"
@@ -36,12 +37,14 @@ PIHOLE_VMID=100
 DEB_SERVER_VMID=52000
 DEB_DESKTOP_VMID=52010
 FED_DESKTOP_VMID=53020
+UBU_DESKTOP_VMID=54000
 
 PIHOLE_CONF="$HOME/tmp/pihole-config.tar.zst"
 PIHOLE_IMG="/var/lib/vz/template/cache/pihole.tar.zst"
 DEB_SERVER_IMG="$HOME/tmp/vzdump-qemu-53000.vma.zst"
 DEB_DESKTOP_IMG="$HOME/tmp/vzdump-qemu-53010.vma.zst"
 FED_DESKTOP_IMG="$HOME/tmp/vzdump-qemu-53020.vma.zst"
+UBU_DESKTOP_IMG="$HOME/tmp/vzdump-qemu-54000.vma.zst"
 
 ##############################################################################
 verbose() {
@@ -394,6 +397,9 @@ setup_vms() {
 	install_vm_template "$DEB_SERVER_VMID" "$DEB_SERVER_IMG" "Debian Console"
 	install_vm_template "$DEB_DESKTOP_VMID" "$DEB_DESKTOP_IMG" "Debian Desktop"
 	install_vm_template "$FED_DESKTOP_VMID" "$FED_DESKTOP_IMG" "Fedora Desktop"
+	if [[ -n ${UBUNTU} ]]; then
+		install_vm_template "$UBU_DESKTOP_VMID" "$UBU_DESKTOP_IMG" "Ubuntu Desktop"
+	fi
 }
 
 ##############################################################################
@@ -404,6 +410,9 @@ download_images() {
 	get_image "$DEB_SERVER_IMG"
 	get_image "$DEB_DESKTOP_IMG"
 	get_image "$FED_DESKTOP_IMG"
+	if [[ -n ${UBUNTU} ]]; then
+		get_image "$UBU_DESKTOP_IMG"
+	fi
 }
 
 ##############################################################################
@@ -511,6 +520,7 @@ while [[ $1 =~ ^- ]] ; do
 		--download-only) download_images; exit 0;;
 		-n|--dry-run|--test) TEST="echo";;
 		--reinstall) REINSTALL=y;;
+		--yocto) UBUNTU=y;;
 		--trace) set -x;;
 		-v|--verbose) VERBOSE=1;;
 		-V|--version) echo $VERSION; exit 0;;
