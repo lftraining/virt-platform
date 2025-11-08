@@ -18,7 +18,6 @@ YELLOW="\e[0;33m"
 BACK="\e[0m"
 
 REINSTALL=
-UBUNTU=
 VERBOSE=
 
 MKDIR="verbose mkdir -p"
@@ -397,9 +396,7 @@ setup_vms() {
 	install_vm_template "$DEB_SERVER_VMID" "$DEB_SERVER_IMG" "Debian Console"
 	install_vm_template "$DEB_DESKTOP_VMID" "$DEB_DESKTOP_IMG" "Debian Desktop"
 	install_vm_template "$FED_DESKTOP_VMID" "$FED_DESKTOP_IMG" "Fedora Desktop"
-	if [[ -n ${UBUNTU} ]]; then
-		install_vm_template "$UBU_DESKTOP_VMID" "$UBU_DESKTOP_IMG" "Ubuntu Desktop"
-	fi
+	install_vm_template "$UBU_DESKTOP_VMID" "$UBU_DESKTOP_IMG" "Ubuntu Desktop"
 }
 
 ##############################################################################
@@ -410,9 +407,7 @@ download_images() {
 	get_image "$DEB_SERVER_IMG"
 	get_image "$DEB_DESKTOP_IMG"
 	get_image "$FED_DESKTOP_IMG"
-	if [[ -n ${UBUNTU} ]]; then
-		get_image "$UBU_DESKTOP_IMG"
-	fi
+	get_image "$UBU_DESKTOP_IMG"
 }
 
 ##############################################################################
@@ -520,7 +515,6 @@ while [[ $1 =~ ^- ]] ; do
 		--download-only) download_images; exit 0;;
 		-n|--dry-run|--test) TEST="echo";;
 		--reinstall) REINSTALL=y;;
-		--yocto) UBUNTU=y;;
 		--trace) set -x;;
 		-v|--verbose) VERBOSE=1;;
 		-V|--version) echo $VERSION; exit 0;;
